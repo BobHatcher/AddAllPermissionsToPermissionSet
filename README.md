@@ -4,6 +4,15 @@ A Salesforce Apex script that will add all permissions to all objects to a given
 ## Summary / Purpose
 Takes a Permission Set and applies all permissions to all objects and all fields, or a list of specified objects and all fields on those objects. Intended to aid organizations who want to give users such as Admins maximum control over data in the system without using the System Administrator Profile.
 
+This will add to a given Permission Set:
+* Read, Write, Delete, View All, Modify All to all objects and Platform Events. You can exclude objects individually or namespace.
+* Read access to all fields on all objects, and optionally edit access
+* Assigns all Record Types for all Objects
+* Sets the Tab to Visible for all Objects
+* Assigns all Apex Classes
+* Assigns all Apex Pages
+* Assigns all Custom Apps
+
 ## tl;dr / I Just Want to Run This Thing / Instructions for Admins and Nontechnical People
 Two easy steps to run this on all your objects. You need to do this while logged in as a user with the System Administrator profile.
 
@@ -19,6 +28,24 @@ System.enqueueJob(aaq);
 *Make sure you have licenses assigned:* If the running user does not have a license to see a given Object, permissions will not be assigned. For example, Omnichannel, Knowledge, or 3rd party apps.  This will not cause the process to error, though.
 
 ## How It Works
+
+This process runs in two parts, since some Permission Set configuration can be set in regular Apex, and others have to go through the Metadata API.
+
+Sequence:
+1. Uses Metadata API to query the Permission Set as it exists at the beginning. It then calls itself, passing an `Instruction` for the next step.
+2. Iteration 2 adds Apex Class permission via the Metadata API.
+3. Iteration 3 adds Apex Page permission via the Metadata API.
+4. Iteration 4 adds Custom App permission via the Metadata API.
+5. Iteration 5 adds Record Types via the Metadata API.
+6. At this point, the system is done updating the PS via the Metadata API, and will now go through objects and fields, applying permission and Tab access.
+7. System calls itself with the first batch of Objects to process.
+
+## Part I: Metadata API Process
+The `PermissionSet` object contains sub-structures such as `applicationVisibilities` that are not available via regular Apex, necessitationg using the Metadata API. This part uses modified processes from the legendary [apex-mdapi](https://github.com/certinia/apex-mdapi) library. 
+
+The code contains Apex versions of the metadata objects using a `_x` suffix to follow longstanding `json2apex` convention. In this way, each object is modeled using its own "shadow" Apex Class. For example, the aforementioned `applicationVisibilities` is a List of `PermissionSetApplicationVisibility` objects. This system maintains a version of `PermissionSetApplicationVisibility` called `PermissionSetApplicationVisibility_x`.
+
+## Part II: Apex Process
 
 This would seem like a natural fit for `Batchable`. But because the process uses the `EntityDefinition` table to determine the list of objects, we run into a few limitations.
 1. `EntityDefinition` does not support `queryMore()`, meaning you can't use it in the source query in a `Batchable`.
