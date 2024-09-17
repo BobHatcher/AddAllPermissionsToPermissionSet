@@ -7,6 +7,15 @@
  * >>>>>>> NO WARRANTY EXPRESSED OR IMPLIED <<<<<<<<<
  * >>>>>>> USE AT YOUR OWN RISK <<<<<<<<<
  * 
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ *  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ *  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ *  THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ *  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ *  OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ *  OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * 
  * PLEASE REVIEW THE README:
  * https://github.com/BobHatcher/AddAllPermissionsToPermissionSet/edit/master/README.md
  * 
@@ -18,73 +27,43 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
     private static Map<String,Schema.Sobjecttype> globalDescribe =Schema.getGlobalDescribe();
     // These are fields that we know we can not apply permissions to.
     private static final Set<String> auditFields = new Set<String>{'currencyisocode','ownerid','recordtypeid','createdbyid','createddate','lastmodifieddate','lastmodifiedbyid','systemmodstamp','isdeleted'};
-    private static final Long runId =  Datetime.now().getTime();
-
+    
     // For testing, set this value to the number of queueables you want to run
     // For example if you set it to 2 it will only run on the first two chunks
     // For all, set to -1; to run once set to 0
-    private static Integer MaxIterations = -1;
+    // Applies to the DML Process only
+    private static final Integer MaxIterations = -1;
+    public static final Boolean EnableDebug =true;
+    public static final Boolean EnableVerboseDebug=true;
 
     public String PermissionSetId {get;set;}
     public Integer RecordsPerQueueable {get;set;}
     public Integer Iteration {get;set;}
     public Boolean EnableWrite {get;set;}
-    public Integer TotalObjects {get;set;}
+    public Decimal TotalObjects {get;set;}
+    public Decimal TotalObjectsThisIteration {get;set;}
     public String Instruction {get;set;}
     public PermissionSet_x PermSet {get;set;}
+    private Set<String> GlobalObjectExclusions {get;set;}
+    private Set<String> GlobalNamespaceExclusions {get; set;}
+    private Set<String> ApexClassExclusions {get;set;}
+    private Set<String> ApexClassNamespaceExclusions {get;set;}
+    private Set<String> ApexPageExclusions {get;set;}
+    private Set<String> ApexPageNamespaceExclusions {get;set;}
+    private Set<String> CustomAppExclusions {get;set;}
+    private Set<String> CustomAppNamespaceExclusions {get;set;}
+    private Set<String> RecordTypeExclusions {get;set;}
+    private Set<String> RecordTypeNamespaceExclusions {get;set;}
+    private Set<String> RecordTypeObjectExclusions {get;set;}
+    private Set<String> ProcessFirst {get;set;}
+    private Map<String,String> ObjectNameReplacements;
+    private Map<String,String> FieldNameReplacements;
     // This is a String that is updated regularly indicating what the system is up to.
     // If there is a failure, the latest message will be published to the debug log
     // alongside the technical error.
     public String Status {get;set;}
-    public static final Boolean EnableDebug =true;
-
-    // -----------
-    // EXCLUSIONS & TRANSLATIONS
-    // These apply to the Object/Field permission process.
-    // -----------
-    // This object contains known issues/changes that need to be made to field names.
-    // For example, on Event, FieldPermissions calls the field locationid but the schema says location
-    public Map<String,String> FieldNameReplacements { get{
-        return new Map<String,String>{'event.locationid'=>'location','case.source'=>'sourceid','livechattranscript.locationid'=>'location','location.locationid'=>'location'};
-    }}
-    // If you need to replace an object name wholesale
-    public Map<String,String> ObjectNameReplacements { get{ 
-        return new Map<String,String>{'systemobjectname'=>'replacmentobjectname'};
-    }}
-    // These are some objects that seem to exist behind the scenes but permissions do not apply
-    // Any object name can be added here.
-    public Set<String> ObjectExclusions { get{
-        return new Set<String>{'knowledgearticleversion'};
-    }}
-    public Set<String> NamespaceExclusions { get{
-        return new Set<String>{'agf__','loop__','et4ae5__'};
-    }}
-    // Excludes from Record Type processing only -- useful if licenses aren't fully applied to your account
-    public Set<String> NamespaceExclusionsRTOnly { get{
-        return new Set<String>{'agf__','loop__','et4ae5__','innohub__','copado__','cloudx_cms__','APXT_CMQM__'.toLowerCase()};
-    }}
-    // The system will process these objects first when applying object/field permissions.
-    public Set<String> ProcessFirst {get{
-        return new Set<String>{'ContactPointAddress'};
-    }}
-    // Exclude specific objects from the Record Type assignment process.
-    public Set<String> RecordTypeObjectExclusions{ get {
-        return new Set<String>{'LSC1__Requisition_Item__c','LSC1__Requisition__c','innohub__Activity__c'};
-    }}
-    // Exclude specific Record Types from the Record Type assignment process.
-    public Set<String> RecordTypeRTExclusions{ get {
-        return new Set<String>{'Campaign.Innovation_Hub_Event'.toLowerCase()};
-    }}
     
-    // This applies to the Metadata API portion.
-    public Set<String> ApexClassExclusions { get {
-        return new Set<String>{'EmailTrackingService','EmailTrackingServiceTest','MissingParamsException','MissingParamsExceptionTest','OutlookComposeController',
-        'OutlookComposeControllerTest','OutlookAuthController','OutlookAuthControllerTest','PardotEndpointHelper','PardotEndpointHelperTest','TrackedEmailEndpoint',
-        'TrackedEmailEndpointTest','AsyncRequest','AsyncRequestTest','AsyncRequestBatch','AsyncRequestBatchTest','AsyncRequestBatchProcessor','AsyncRequestBatchProcessorTest',
-        'AsyncRequestOCLPruningBatch','AsyncRequestOCLPruningBatchTest','AsyncRequestOCLPruningBatch','AsyncRequestOCLPruningBatchTest','OutlookEmail','OutlookEmailTest'};
-    }}
-    public static final String INSTRUCTION_OBJECTSANDFIELDS = 'objectsandfields';
-    public static final String INSTRUCTION_PULL_METADATA = 'start'; // Effectively the same thing as _START
+    public static final String INSTRUCTION_TABSOBJECTSANDFIELDS = 'objectsandfields';
     public static final String INSTRUCTION_ADD_APEX_CLASSES = 'addApexClasses';
     public static final String INSTRUCTION_ADD_APEX_PAGES = 'addApexPages';
     public static final String INSTRUCTION_ADD_CUSTOM_APPS = 'addCustomApps';
@@ -92,70 +71,80 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
     public static final String INSTRUCTION_UPDATE_METADATA = 'updateMetadata';
     public static final String INSTRUCTION_START = 'start';
 
-    public UpdatePSAllFieldsAllObjectsQueueable() {} 
-
-    // Simplified constructor. Recommend using this in most cases.
+    // Simple constructor to kick off the process with default values.
     public UpdatePSAllFieldsAllObjectsQueueable(String permissionSetToBuildId) {
-        Instruction = INSTRUCTION_OBJECTSANDFIELDS;
-        commonConstructor(0,20,permissionSetToBuildId,true);
+        this(INSTRUCTION_START,0,20,permissionSetToBuildId,true, new PermissionSet_x());
+    }
+
+    // Simple constructor to kick off the process and set the write flag.
+    public UpdatePSAllFieldsAllObjectsQueueable(String permissionSetToBuildId, Boolean enableWrite) {
+        this(INSTRUCTION_START,0,20,permissionSetToBuildId,enableWrite, new PermissionSet_x());
     }
 
     // Configurable constructor, if you want to set the chunk size (i.e., "batch size", or how many objects to process per queueable instance)
     public UpdatePSAllFieldsAllObjectsQueueable(Integer chunkSize, String permissionSetToBuildId, Boolean ew) {
-        commonConstructor(0,chunkSize,permissionSetToBuildId,ew);
-        
+        this(INSTRUCTION_START,0,chunkSize,permissionSetToBuildId,ew,null);
     }
 
     // Do not use this constructor to kick off the process. This is the constructor the process uses to call itself.
-    public UpdatePSAllFieldsAllObjectsQueueable(Integer iter, Integer chunkSize, String permissionSetToBuildId, Boolean ew) {
-        commonConstructor(iter,chunkSize,permissionSetToBuildId,ew);
-        
-    }
-
-    public UpdatePSAllFieldsAllObjectsQueueable(String inst, String permissionSetToBuildId){
-        PermSet = new PermissionSet_x();
-        PermissionSetId = permissionSetToBuildId;
-        Instruction = inst;
-    }
-
-    public UpdatePSAllFieldsAllObjectsQueueable(String inst, String permissionSetToBuildId, PermissionSet_x ps){
-        PermSet = ps;
-        PermissionSetId = permissionSetToBuildId;
-        Instruction = inst;
-    }
-
-    private void commonConstructor(Integer iter, Integer chunkSize, String permissionSetToBuildId, Boolean ew){
+    public UpdatePSAllFieldsAllObjectsQueueable(String instr, Integer iter, Integer chunkSize, String permissionSetToBuildId, Boolean ew, PermissionSet_x ps) {
+        initExclusions();
+        Instruction = instr;
+        PermSet = (ps == null ? new PermissionSet_x() : ps);
         PermissionSetId = permissionSetToBuildId;
         Iteration = iter;
         RecordsPerQueueable = chunkSize;
         EnableWrite = ew;
-        
-        if (!validateObjectQuantity()){
-            return;
-        }
         
         if (MaxIterations != -1){
             system.debug('\n\n\n\n*********** \nWARNING: PROCESS IS NOT SET TO RUN OVER ALL OBJECTS \n***********\n\n\n\n\n');
         }
     }
 
-    private Boolean validateObjectQuantity(){
-        // This queries the total quantity of objects in the org that will be processed.
-        // Since EntityDefinition doesn't support more than 2000 records coming back, abort if we find more than that many.
-        Boolean isOK = false;
-        Instruction = INSTRUCTION_OBJECTSANDFIELDS;
-        try {
-            List<sObject> entityDefinitions = Database.query(getBaseEntityDefinitionQuery());
-            isOK = entityDefinitions.size() < 2000;
-            debug('Total ' + entityDefinitions.size() + ' Objects to Process Before Filtering for isCustomizable or Platform Events.');
-        } catch (Exception e) {
-            isOK = false;
-        }
-        if (!isOK){
-            system.debug('Error: you have more than 2000 objects; this process can not be used.');
-            throw new TMException('Error: you have more than 2000 objects; this process can not be used.');
-        }
-        return isOK;
+    private void initExclusions(){
+        
+        ///// GLOBAL EXCLUSIONS
+
+        // Global object exclusions - applies to all parts.
+        // If you need to replace an object name wholesale
+        GlobalObjectExclusions= new Set<String>{'knowledgearticleversion'};
+        GlobalNamespaceExclusions = new Set<String>{'agf','loop','et4ae5','field_trip','APXT_BPM'.toLowerCase()};
+       
+
+        ///// METADATA API EXCLUSIONS & MAPPINGS (ApexClass, ApexPage, CustomApp, Record Type)
+        ApexClassExclusions = new Set<String>{'EmailTrackingService','EmailTrackingServiceTest','MissingParamsException','MissingParamsExceptionTest','OutlookComposeController',
+        'OutlookComposeControllerTest','OutlookAuthController','OutlookAuthControllerTest','PardotEndpointHelper','PardotEndpointHelperTest','TrackedEmailEndpoint',
+        'TrackedEmailEndpointTest','AsyncRequest','AsyncRequestTest','AsyncRequestBatch','AsyncRequestBatchTest','AsyncRequestBatchProcessor','AsyncRequestBatchProcessorTest',
+        'AsyncRequestOCLPruningBatch','AsyncRequestOCLPruningBatchTest','AsyncRequestOCLPruningBatch','AsyncRequestOCLPruningBatchTest','OutlookEmail','OutlookEmailTest'};
+        // To exclude all Apex Classes that have a Namespace, enter '*' as a value in the List.
+        ApexClassNamespaceExclusions = new Set<String>();
+
+        ApexPageExclusions = new Set<String>{'ComposerSolution'};
+        // To exclude all Apex Pages that have a Namespace, enter '*' as a value in the List.
+        ApexPageNamespaceExclusions = new Set<String>{'pi','APXTConga4','activities','permissioner','MassManager','*'};
+
+        // CustomAppExclusions: Use DeveloperName as shown in the AppDefinition table
+        CustomAppExclusions = new Set<String>{'ExpressionSetConsole','SalesCloudMobile'};
+        // To exclude all Custom Apps that have a Namespace, enter '*' as a value in the List.
+        CustomAppNamespaceExclusions = new Set<String>();
+
+        RecordTypeExclusions = new Set<String>{'Campaign.Innovation_Hub_Event'.toLowerCase()};
+        // Excludes from Record Type processing only -- useful if licenses aren't fully applied to your account
+        // To exclude all RT's that have a Namespace, enter '*' as a value in the List.
+        RecordTypeNamespaceExclusions = new Set<String>{'agf','loop','et4ae5','innohub','copado','cloudx_cms','APXT_CMQM'.toLowerCase()};
+        // Exclude Record Types related to these objects.
+        RecordTypeObjectExclusions = new Set<String>{'LSC1__Requisition_Item__c','LSC1__Requisition__c','innohub__Activity__c'};
+    
+        ///// DML PROCESS EXCLUSIONS & MAPPINGS (Objects & Fields)
+
+        // Object & Field process will process these objects at the start. 
+        ProcessFirst = new Set<String>{'ContactPointAddress'};
+        // These are some objects that seem to exist behind the scenes but permissions do not apply
+        // Any object name can be added here.
+        ObjectNameReplacements = new Map<String,String>{'systemobjectname'=>'replacmentobjectname'};
+        // This object contains known issues/changes that need to be made to field names.
+        // For example, on Event, FieldPermissions calls the field locationid but the schema says location
+        FieldNameReplacements = new Map<String,String>{'event.locationid'=>'location','case.source'=>'sourceid','livechattranscript.locationid'=>'location','location.locationid'=>'location'};
     }
 
     /***********************************
@@ -163,43 +152,129 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
      **********************************/
     public void execute(QueueableContext context) {
         // Main executable.
-        // The strategy here is to pull the objects with an OFFSET and a LIMIT.
-        // The first time through, Iteration is 0, so offset is 0*5 = 0. If RecordsPerQueueable is 5, this will pull five records
-        // starting with the 0th record returned.
-        // The next time through, Iteration is 1, so it will pull 5 more records starting with result #5.
-        // This is basically mimicing the chunking that the batch process does for us.. if only we could use batch.
-        if (Instruction == INSTRUCTION_OBJECTSANDFIELDS){
-            Status = 'Commencing Iteration ' + Iteration + '' + ' with PermissionSetId ' + PermissionSetId;
+        PermissionSet_x ps = PermSet;
+        String next = '';
+        Status = '\n\n ***** Starting Execute with Instruction ' + Instruction + ' Iteration=' + Iteration;
+        debug(status);
+        if (Instruction == INSTRUCTION_START){
+            // Step 1: Query the existing PermissionSet via Metadata API.
+            try {
+                ps = getExistingPermissionSetViaMdAPI(PermissionSetId);
+            } catch (UpdatePSException e){
+                debug('\n\nLatest Status='+Status+'\nError In Instruction '+Instruction+':\n '+e.getMessage());
+                throw e;
+            }
+            // if the Permissionset was null, a new queueable was spawned to retry
+            if (ps == null)
+                return;
+            next = INSTRUCTION_ADD_APEX_CLASSES;
+        } else if (Instruction == INSTRUCTION_ADD_APEX_CLASSES){
+            // Step 2: Add Apex Class permissions to the PermissionSet.
+            try {
+                ps = addApexClassPermissions(ps);
+            } catch (UpdatePSException e){
+                debug('\n\nLatest Status='+Status+'\nError In Instruction '+Instruction+':\n '+e.getMessage());
+                throw e;
+            }
+            next = INSTRUCTION_ADD_APEX_PAGES;
+        } else if (Instruction == INSTRUCTION_ADD_APEX_PAGES){
+            // Step 3: Add Apex Page permissios to the PermissionSet.
+            try {
+                ps = addApexPagePermissions(ps);
+            } catch (UpdatePSException e){
+                debug('\n\nLatest Status='+Status+'\nError In Instruction '+Instruction+':\n '+e.getMessage());
+                throw e;
+            }
+            next = INSTRUCTION_ADD_CUSTOM_APPS;
+        } else if (Instruction == INSTRUCTION_ADD_CUSTOM_APPS){
+            // Step 4: Add Custom App permissions to the Permission Set.
+            try {
+                ps = addCustomAppPermissions(ps);
+            } catch (UpdatePSException e){
+                debug('\n\nLatest Status='+Status+'\nError In Instruction '+Instruction+':\n '+e.getMessage());
+                throw e;
+            }
+            next = INSTRUCTION_ADD_RECORDTYPES;
+        } else if (Instruction == INSTRUCTION_ADD_RECORDTYPES){
+            // Step 5: Add Record Types to the Permission set.
+            try {
+                ps = addRecordTypePermissions(ps);
+            } catch (UpdatePSException e){
+                debug('\n\nLatest Status='+Status+'\nError In Instruction '+Instruction+':\n '+e.getMessage());
+                throw e;
+            }
+            next = INSTRUCTION_UPDATE_METADATA;
+        } else if (Instruction == INSTRUCTION_UPDATE_METADATA){
+            // Step 6: Update the Permission Set via Metadata API to add the 
+            // permissions added in steps 2-5.
+            try {
+                pushUpdatedPermissionSetviaMdApi(ps);
+            } catch (UpdatePSException e){
+                debug('\n\nError In Instruction '+Instruction+':\n '+e.getMessage());
+                throw e;
+            }
+            next = INSTRUCTION_TABSOBJECTSANDFIELDS;
+        } else if (Instruction == INSTRUCTION_TABSOBJECTSANDFIELDS){
+
+            // Step 7: Add Object, Field and Tab Permissions via ordinary Apex/DML
+
+            // The strategy here is to pull the objects with an OFFSET and a LIMIT.
+            // The first time through, Iteration is 0, so offset is 0*5 = 0. If RecordsPerQueueable is 5, this will pull five records
+            // starting with the 0th record returned.
+            // The next time through, Iteration is 1, so it will pull 5 more records starting with result #5.
+            // This is basically mimicing the chunking that the batch process does for us.. if only we could use batch.
+            
+            Status = '\n\n ***** Commencing Iteration ' + Iteration + '' + ' with PermissionSetId ' + PermissionSetId + '. RecordsPerQueueable=' + RecordsPerQueueable;
             debug(Status);
             
             List<String> objectNames = buildObjectList();
             if (objectNames == null){
                 return; // Process is done
             } else {
-                TotalObjects = objectNames?.size();
+                TotalObjectsThisIteration = objectNames?.size();
             }
 
-            debug('After filtering out-of-scope objects, now processing objects: ' + objectNames);
+            Status = 'After filtering out-of-scope objects, now processing objects: ' + objectNames;
+            debug(Status);
             try {
-                // Invoke the main process on the objects returned by the query.
+                // Invoke the main process on the objects returned by the query for Object/Field permissions.
                 dmlProcess(objectNames);
             } catch (Exception e){
                 System.debug('GOT ERROR IN \'go\' METHOD: \nStatus: '+Status+'\n' + e.getMessage());
-                TMException.logErrorAsync(e,'ERROR_MASS_PERMISSIONS','UpdatePSAllFieldsAllObjectsQueueable','go',Status);
                 throw e;
             }
 
             // MaxIterations is a failsafe for testing. If you set it to 5, it will only run five instances of the Queueable before stopping.
             if ((MaxIterations == -1 || Iteration < MaxIterations) && MaxIterations != 0){
                 // Create a new Queueable to go over the next chunk.
-                UpdatePSAllFieldsAllObjectsQueueable aaq = new UpdatePSAllFieldsAllObjectsQueueable(Iteration + 1, RecordsPerQueueable, PermissionSetId, EnableWrite);
-                System.enqueueJob(aaq); 
+                next = INSTRUCTION_TABSOBJECTSANDFIELDS;
+
             } else {
+                next = 'Stop'; 
                 System.debug('Hit max iteration value of '+MaxIterations+'. Not enqueing any further instances.');
-            }
-        } else {
-            mdApiProcess(PermSet);
+            } 
+            
         }
+
+        if (next != 'Stop'){
+            // The first time we call this for Objects+Fields we don't want to increment the Iteration
+            
+            Integer thisIteration = 0;
+            // If this is after the metadata update and we are moving on to the DML (tabs/objects/fields)
+            // for the first time, Iteration has to be 0 and we can't autoincrement it.
+            if (Instruction == INSTRUCTION_UPDATE_METADATA && next == INSTRUCTION_TABSOBJECTSANDFIELDS){
+                thisIteration = 0;
+            } else if (Instruction == INSTRUCTION_TABSOBJECTSANDFIELDS) {
+                thisIteration = ++ Iteration ;
+            } else {
+                thisIteration = 0;
+            }
+            Status = 'Enqueueing next Metadata API Step: ' + next + ', Finishing Iteration ' + Iteration + ' and calling next with thisIteration='+thisIteration;
+            debug(Status);
+            UpdatePSAllFieldsAllObjectsQueueable aaq = new UpdatePSAllFieldsAllObjectsQueueable(next, thisIteration, RecordsPerQueueable, PermissionSetId, EnableWrite, ps);
+            System.enqueueJob(aaq); 
+        }
+        
         
         
     }
@@ -209,88 +284,72 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
     ################################################################################################################################## */
     
     /***********************************
-    *   MDAPIPROCESS
+    *   GETEXISTINGPERMISSIONSETVIAMDAPI
      **********************************/
-    public void mdApiProcess(PermissionSet_x ps){
-        // This Metadata API Process is the main controller for the parts of the PS that need to be updated via the Metadata API.
-        debug('\n\nmdApiProcess ' + PermissionSetId + ' ' + Instruction);
-        String next ;
-        if (ps == null && Instruction != INSTRUCTION_PULL_METADATA){
-            debug('PermissionSet_x is Null');
-            throw new MetadataServiceException('PermissionSet_x is null, can\'t continue');
-        }
-        if (Instruction == INSTRUCTION_PULL_METADATA || Instruction == INSTRUCTION_START){
-            ps = getExistingPermissionSetViaMdAPI(PermissionSetId);
-            next = INSTRUCTION_ADD_APEX_CLASSES;
-        } else if (Instruction == INSTRUCTION_ADD_APEX_CLASSES){
-            ps = addApexClassPermissions(ps);
-            next = INSTRUCTION_ADD_APEX_PAGES;
-        } else if (Instruction == INSTRUCTION_ADD_APEX_PAGES){
-            ps = addApexPagePermissions(ps);
-            next = INSTRUCTION_ADD_CUSTOM_APPS;
-        } else if (Instruction == INSTRUCTION_ADD_CUSTOM_APPS){
-            ps = addCustomAppPermissions(ps);
-            next = INSTRUCTION_ADD_RECORDTYPES;
-        } else if (Instruction == INSTRUCTION_ADD_RECORDTYPES){
-            ps = addRecordTypePermissions(ps);
-            next = INSTRUCTION_UPDATE_METADATA;
-        } else if (Instruction == INSTRUCTION_UPDATE_METADATA){
-            pushUpdatedPermissionSetviaMdApi(ps);
-            next = INSTRUCTION_OBJECTSANDFIELDS;
-        } else {
-            return;
-        }
-        if (Instruction == INSTRUCTION_UPDATE_METADATA){
-            UpdatePSAllFieldsAllObjectsQueueable psq = new UpdatePSAllFieldsAllObjectsQueueable(PermissionSetId);
-            System.enqueueJob(psq);
-        } else {
-            Status = 'Enqueueing next Metadata API Step: ' + next;
-            debug(Status);
-            enqueueNext(next, PermissionSetId, ps);
-        }
-        
-    }
-
-    public void enqueueNext(String next, String psId, PermissionSet_x ps){
-        UpdatePSAllFieldsAllObjectsQueueable psq = new UpdatePSAllFieldsAllObjectsQueueable(next,psId,ps);
-        System.enqueueJob(psq);
-    }
-    
     public PermissionSet_x getExistingPermissionSetViaMdAPI(Id psId){
+        // Retrieves the current PermissionSet via the Metadata API.
+        // This is the first step in the Metadata API portion of the process.
         MdPort service = new MdPort();
         service.SessionHeader = new SessionHeader_element();
         service.SessionHeader.sessionId = UserInfo.getSessionId();
         String psName = [SELECT Name FROM PermissionSet WHERE Id =: psId LIMIT 1].Name;
-        debug('Updating PermissionSet ' + psName + ' ('+psId+')');
-        return  (PermissionSet_x)service.readMetadata('PermissionSet', new String[] { psName }).getRecords()[0];
-  }
+        detailedDebug('Retrieving PermissionSet ' + psName + ' ('+psId+')');
+        PermissionSet_x ps = null;
+        try {
+            ReadMetadataResult res = service.readMetadata('PermissionSet', new String[] { psName });
+            if (res.IsError && res?.e?.getMessage().contains('IO Exception: Read timed out')){
+                Status = 'Read timed out, trying again';
+                debug(Status);
+                UpdatePSAllFieldsAllObjectsQueueable aaq = new UpdatePSAllFieldsAllObjectsQueueable(Instruction, 0, RecordsPerQueueable, PermissionSetId, EnableWrite, null);
+                System.enqueueJob(aaq);
+            } else {
+                ps = (PermissionSet_x) res.result.getRecords()[0];
+            }
+            
+            //ps = (PermissionSet_x)service.readMetadata('PermissionSet', new String[] { psName }).getRecords()[0];
+        } catch (MetadataServiceException e){
+
+            debug('Error; Message='+e.getMessage());
+            throw e;
+
+            
+        }
+        return ps;
+    }
   
+    /***********************************
+    *   PUSHUPDATEDPERMISSIONSETVIAMDAPI
+     **********************************/
     private void pushUpdatedPermissionSetViaMdApi(Permissionset_x ps){
+        // Saves the updated PermissionSet via the Metadata API.
+        // Largely cribbed from https://github.com/certinia/apex-mdapi/blob/master/apex-mdapi/src/classes/MetadataServiceExamples.cls
         MdPort service = getMetadataApiService();
         try {
             debug('Saving...');
             List<SaveResult> results =
                     service.updateMetadata(
                         new Metadata_x[] { ps });
-                        debug(json.serializePretty(results));
+                        detailedDebug(json.serializePretty(results));
             for (SaveResult sr : results){
-                handleSaveResults(sr);
+                handleSaveResults(sr, ps);
             }
         } catch (CalloutException e){
             debug('MESSAGE: ' + e.getMessage());
             debug('stack Trace ' +e.getStackTraceString());
-            debug('Cause'+e.toString());
             throw e;
         }
         debug('Successfully updated the PermissionSet.');
     }
 
-    public static void handleSaveResults(SaveResult saveResult)
+
+    public static void handleSaveResults(SaveResult saveResult, PermissionSet_x ps)
     {
-        
+        // Processes the save result.
+        // Largely cribbed from https://github.com/certinia/apex-mdapi/blob/master/apex-mdapi/src/classes/MetadataServiceExamples.cls    
+
         // Nothing to see?
         if(saveResult==null || saveResult.success){
-            debug('This saveResult was a Success');
+            detailedDebug('This saveResult was a Success');
             return;
         }
            
@@ -309,18 +368,30 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
             if(messages.size()>0)
                 throw new MetadataServiceException(String.join(messages, ' '));
         }
-        if(!saveResult.success)
+        if(!saveResult.success){
+            detailedDebug('\n\nps.ApexClassPermissions: ' +JSON.serializePretty(ps.classAccesses));
+            detailedDebug('\n\nps.ApexPagePermissions: ' +JSON.serializePretty(ps.pageAccesses));
+            detailedDebug('\n\nps.RecordtypeAccesses: ' +JSON.serializePretty(ps.recordTypeVisibilities));
+            detailedDebug('\n\nps.App Accesses: ' + JSON.serializePretty(ps.applicationVisibilities));
             throw new MetadataServiceException('Request failed with no specified error.');
+        }
     }
 
     public class MetadataServiceException extends Exception { }
 
     private PermissionSet_x addApexClassPermissions(PermissionSet_x ps){
+        // Go to through the existing Apex class permissions and log them, so we can skip adding them
+        // This can cause errors on update if we try to update permission that already exists.
         if (ps.classAccesses == null){
             ps.classAccesses = new List<PermissionSetApexClassAccess_x>();
         }
 
-        List<ApexClass> classes = [SELECT Id, Name FROM ApexClass WHERE NamespacePrefix = null and LengthWithoutComments > 0 AND IsValid = true AND Status='Active' and Name NOT IN : ApexClassExclusions ];
+        // Query for all Apex Classes in the system, applying our exclusions
+        String nsExclusions =' NamespacePrefix NOT IN : ApexClassNamespaceExclusions AND NamespacePrefix NOT IN : GlobalNamespaceExclusions';
+        if (GlobalNamespaceExclusions.contains('*') || ApexClassNamespaceExclusions.contains('*')){
+            nsExclusions = ' NamespacePrefix = null';
+        }
+        List<ApexClass> classes = (List<ApexClass>)Database.query('SELECT Id, Name FROM ApexClass WHERE NamespacePrefix = null and LengthWithoutComments > 0 AND IsValid = true AND Status=\'Active\' and Name NOT IN : ApexClassExclusions AND ' + nsExclusions);
 
         // Need to track what access already exists, because we can inadvertently add duplicates to
         // the list, which may irretrievably break the Permission Set
@@ -328,12 +399,16 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
         for (PermissionSetApexClassAccess_x existingPerm : ps.classAccesses){
             existingAccess.add(existingPerm.apexClass);
         }
-        debug('Existing Access ' + existingAccess);
+        detailedDebug('Existing Access ' + existingAccess);
+        // For each Class we queried...
         for (ApexClass ac : classes){
+            // If access does not already exist...
             if (!existingAccess.contains(ac.Name)){
+                // Create a new permission...
                 PermissionSetApexClassAccess_x perm  = new PermissionSetApexClassAccess_x();
                 perm.enabled = true;
                 perm.apexClass = ac.Name;
+                // and add it to the master Permission Set.
                 ps.classAccesses.add(perm);
             }
         }
@@ -341,89 +416,128 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
     }
 
     private PermissionSet_x addApexPagePermissions(PermissionSet_x ps){
+        // If there are no pre-existing Apex Page permissions in the PermissionSet,
+        // Create a List to hold them.
         if (ps.pageAccesses == null){
             ps.pageAccesses = new List<PermissionSetApexPageAccess_x>();
         }
 
-        List<ApexPage> pages = [SELECT Id, Name FROM ApexPage WHERE NamespacePrefix = null];
+        // Query for all Apex Pages in the system, applying our exclusions
+        String nsExclusions =' NamespacePrefix NOT IN : ApexPageNamespaceExclusions AND NamespacePrefix NOT IN : GlobalNamespaceExclusions';
+        if (GlobalNamespaceExclusions.contains('*') || ApexPageNamespaceExclusions.contains('*')){
+            nsExclusions = ' NamespacePrefix = null';
+        }
+        List<ApexPage> pages = (List<ApexPage>) Database.query('SELECT Id, Name FROM ApexPage WHERE Name NOT IN : ApexPageExclusions AND ' + nsExclusions);
+        detailedDebug('Adding Permissions to ' + pages.size() + ' Apex Pages');
+        // Need to track what access already exists, because we can inadvertently add duplicates to
+        // the list, which may irretrievably break the Permission Set
         Set<String> existingAccess = new Set<String>();
-        for (PermissionSetApexPageAccess_x perm : ps.PageAccesses){
+        for (PermissionSetApexPageAccess_x perm : ps.pageAccesses){
             existingAccess.add(perm.apexPage);
         }
-        debug('Existing Apex PAGE Access ' + existingAccess?.size());
+        detailedDebug('Existing Apex PAGE Access ' + existingAccess?.size());
         List<String> skipped = new List<String>();
+
+
+        // For each Page we queried..
         for (ApexPage ap : pages){
+            // If access doesn't already exist...
             if (!existingAccess.contains(ap.Name)){
+                // Create a new permission
                 PermissionSetApexPageAccess_x perm  = new PermissionSetApexPageAccess_x();
                 perm.enabled = true;
                 perm.apexPage = ap.Name;
+                // And add the new one to the list in the Permission Set
                 ps.pageAccesses.add(perm);
             } else {
                 skipped.add(ap.Name);
             }
             
         }
-        debug('Skipped Apex Pages ('+skipped?.size()+') -> ' + String.join(skipped,', '));
+        detailedDebug('Skipped Apex Pages ('+skipped?.size()+') -> ' + String.join(skipped,', '));
         return ps;
     }
 
     private PermissionSet_x addCustomAppPermissions(PermissionSet_x ps){
+        // If there are no pre-existing App permissions in the PermissionSet,
+        // Create a List to hold them inside the master PermissionSet.
         if (ps.applicationVisibilities == null){
             ps.applicationVisibilities = new List<PermissionSetApplicationVisibility_x>();
         }
+
+        // Need to track what access already exists, because we can inadvertently add duplicates to
+        // the list, which may irretrievably break the Permission Set
         Set<String> existingAccess = new Set<String>();
         for (PermissionSetApplicationVisibility_x perm: ps.applicationVisibilities){
             existingAccess.add(perm.application.toLowerCase());
         }
         
-        List<AppDefinition> apps = [SELECT Id, Label, MasterLabel, DeveloperName FROM AppDefinition];
+        // Query for all Custom Apps in the system, applying our exclusions
+        String nsExclusions =' NamespacePrefix NOT IN : CustomAppNamespaceExclusions AND NamespacePrefix NOT IN : GlobalNamespaceExclusions';
+        if (GlobalNamespaceExclusions.contains('*') || CustomAppNamespaceExclusions.contains('*')){
+            nsExclusions = ' NamespacePrefix = null';
+        }
+        List<AppDefinition> apps = (List<AppDefinition>) Database.Query('SELECT Id, Label, MasterLabel, DeveloperName, NamespacePrefix FROM AppDefinition WHERE  DeveloperName NOT IN : CustomAppExclusions AND '+ nsExclusions);
         List<String> skipped = new List<String>();
-        for (PermissionSetApplicationVisibility_x perm : ps.applicationVisibilities){
-            if (!existingAccess.contains(perm.application.toLowerCase())){
+        // For each App we queried..
+        for (AppDefinition ad : apps){
+            // If access doesn't already exist...
+            if (!existingAccess.contains(ad.DeveloperName.toLowerCase())){
+                // Create a new permission
                 PermissionSetApplicationVisibility_x av = new PermissionSetApplicationVisibility_x();
-                av.application = perm.application;
+                av.application = (ad.NamespacePrefix != null ? ad.NamespacePrefix + '__' : '') + ad.DeveloperName;
                 av.visible = true;
+                // and add it to the master Permission Set.
                 ps.applicationVisibilities.add(av);
             } else {
-                skipped.add(perm.application);
+                skipped.add(ad.DeveloperName);
             }
         }
+        detailedDebug('Skipped Apps: ' + String.join(skipped,', '));
         return ps;
     }
 
     public PermissionSet_x addRecordTypePermissions(PermissionSet_x ps){
+        // If there are no pre-existing RT permissions in the PermissionSet,
+        // Create a List to hold them inside the master PermissionSet.
         if (ps.recordTypeVisibilities == null){
             ps.recordTypeVisibilities = new List<PermissionSetRecordTypeVisibility_x>();
         }
+
+        // Need to track what access already exists, because we can inadvertently add duplicates to
+        // the list, which may irretrievably break the Permission Set
         Set<String> existingAccess = new Set<String>();
         for (PermissionSetRecordTypeVisibility_x perm : ps.recordTypeVisibilities){
             existingAccess.add(perm.recordType.toLowerCase());
         }
-        List<RecordType> recordTypes = [SELECT Id, DeveloperName, SobjectType FROM RecordType WHERE SobjectType NOT IN : ObjectExclusions and sObjectType NOT IN : RecordTypeObjectExclusions];
+
+        // Query for all Record Types in the system, applying our exclusions
+        String nsExclusions =' NamespacePrefix NOT IN : RecordTypeNamespaceExclusions AND NamespacePrefix NOT IN : GlobalNamespaceExclusions';
+        if (GlobalNamespaceExclusions.contains('*') || RecordTypeNamespaceExclusions.contains('*')){
+            nsExclusions = ' NamespacePrefix = null';
+        }
+        List<RecordType> recordTypes = (List<RecordType>) Database.query('SELECT Id, DeveloperName, SobjectType FROM RecordType WHERE SobjectType NOT IN : GlobalObjectExclusions and sObjectType NOT IN : RecordTypeObjectExclusions AND ' + nsExclusions);
         List<String> skipped = new List<String>();
         
+        // For each RT we queried..
         for (RecordType rt :recordTypes){
-            Boolean isNamespaceExcluded = false;
-            for (String ns : NamespaceExclusions){
-                if (rt.sObjectType.startsWithIgnoreCase(ns)){
-                    isNamespaceExcluded = true;
-                }
-            }
-            for (String ns : NamespaceExclusionsRTOnly){
-                if (rt.sObjectType.startsWithIgnoreCase(ns)){
-                    isNamespaceExcluded = true;
-                }
-            }
+            // In the RecordType table, the object name and the Record Type name are in separate fields
+            // Need to concatenate them together to make the key that matches format expected by the
+            // Metadata API.
             String rtKey = (rt.sObjectType + '.' + rt.DeveloperName).toLowerCase();
-            if (!isNamespaceExcluded && !existingAccess.contains(rtKey) && !RecordTypeRTExclusions.contains(rtKey)){
+            // If access doesn't already exist...
+            if (!existingAccess.contains(rtKey)){
+                // Create a new permission
                 PermissionSetRecordTypeVisibility_x rtv = new PermissionSetRecordTypeVisibility_x();
                 rtv.RecordType = rt.sObjectType + '.' + rt.DeveloperName;
                 rtv.visible = true;
+                // and add it to the master Permission Set.
                 ps.RecordTypeVisibilities.add(rtv);
             } else {
                 skipped.add(rtKey);
             }   
         }
+        detailedDebug('Skipped Record Types Due to Pre-Existing Access: ' + String.join(skipped,', '));
         return ps;
     }
 
@@ -513,13 +627,26 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
      **********************************/
     public List<String> buildObjectList(){
         List<String> objectNames = new List<String>();
-        objectNames.addAll(ProcessFirst);
+        if (Iteration == 0)
+            objectNames.addAll(ProcessFirst);
         Integer offset = Iteration * RecordsPerQueueable;
 
         
         String query = getBaseEntityDefinitionQuery() + '  LIMIT :RecordsPerQueueable OFFSET : offset';
-        List<EntityDefinition> entityDefinitions = (List<EntityDefinition>) Database.query(query);
         
+        List<EntityDefinition> entityDefinitions = new List<EntityDefinition>();
+        Map<String, Object> nameBind = new Map<String, Object>{'RecordsPerQueueable' => RecordsPerQueueable, 'offset' => offset, 'GlobalNamespaceExclusions' => GlobalNamespaceExclusions, 'GlobalObjectExclusions' => GlobalObjectExclusions};
+        Status = '\nFiring query: ' + query + '\n LIMIT ' + RecordsPerQueueable + ' OFFSET ' + offset + '\nBindings:\n'+nameBind;
+        debug(Status);
+        try {
+            entityDefinitions = (List<EntityDefinition>) Database.queryWithBinds(query,nameBind,AccessLevel.SYSTEM_MODE);
+        } catch (UpdatePSException e) {
+            debug(e.getMessage());
+            throw e;
+        }
+        
+        Status = 'Query returned ' + entityDefinitions?.size() + ' records';
+        debug(Status);
         // If the query doesn't return anything, the process dies.
         if (entityDefinitions.size() == 0){
             debug('No more objects to process. Exiting.');
@@ -528,17 +655,17 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
         }
         // Simplify to a list of object names.
         for (EntityDefinition ed : entityDefinitions){
-            // We want to include objects where customizable is TRUE, OR they are a platform event.
-            // EntityDefinition queries don't support OR clauses ('Disjunctions not supported')
-            Boolean isNamespaceExcluded = false;
-            for (String ns : NamespaceExclusions){
-                if (ed.QualifiedAPIName.startsWith(ns)){
-                    isNamespaceExcluded = true;
-                }
-            }
-
+            
             // If it is on the ProcessFirst list, it was added when the list was created at the top of this method.
-            if (!ProcessFirst.contains(ed.QualifiedApiName.toLowerCase()) && !isNamespaceExcluded && !ObjectExclusions.contains(ed.QualifiedApiName.toLowerCase()) && (ed.IsCustomizable || ed.QualifiedAPIName.endsWith('__e'))){
+            Boolean processFirstContains = ProcessFirst.contains(ed.QualifiedApiName.toLowerCase());
+            Boolean isCustomizable = ed.isCustomizable;
+            Boolean isPlatformEvent = ed.QualifiedAPIName.endsWith('__e');
+            Boolean isGlobalObjectExclusion = GlobalObjectExclusions.contains(ed.QualifiedApiName.toLowerCase());
+            Boolean isNamespaceExclusion = GlobalNamespaceExclusions.contains(ed?.NamespacePrefix?.toLowerCase()) || GlobalNamespaceExclusions?.contains('*');
+            Boolean addObject = (isCustomizable || isPlatformEvent) && !isNamespaceExclusion && !isGlobalObjectExclusion && !processFirstContains;
+            Status = 'Object '+ ed.QualifiedAPIName + ': Adding= '+addObject+' // processFirstContains=' + processFirstContains + ' isCustomizable=' + isCustomizable + ' isPlatformEvent=' + isPlatformEvent +  ' isGlobalObjectExclusion=' + isGlobalObjectExclusion + + ' isNamespaceExclusion=' + isNamespaceExclusion;
+            debug(Status);
+            if (addObject){
                 if (ObjectNameReplacements.containsKey(ed.QualifiedApiName.toLowerCase())){
                     objectNames.add(ObjectNameReplacements.get(ed.QualifiedApiName.toLowerCase()));
                 } else {
@@ -555,8 +682,10 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
      **********************************/
     public String getBaseEntityDefinitionQuery(){
         // This is common to two queries in this process.
-        // the main go() process appends the OFFSET and LIMIT, so using the Database.query method rather than [] notation.
-        return 'SELECT QualifiedApiName, IsCustomizable FROM EntityDefinition WHERE (NOT(QualifiedAPIName LIKE \'%__mdt\')) AND (NOT(QualifiedAPIName LIKE \'%__Tag\')) AND (NOT(QualifiedAPIName LIKE \'%__Share\')) AND (NOT(QualifiedAPIName LIKE \'%__ChangeEvent\')) AND (NOT(QualifiedAPIName LIKE \'%__History\')) AND (NOT(QualifiedAPIName LIKE \'%__Feed\')) AND (NOT(QualifiedAPIName LIKE \'%__VoteStat\')) AND (NOT(QualifiedAPIName LIKE \'%__ViewStat\')) AND (NOT(QualifiedAPIName LIKE \'%__DataCategorySelection\')) order by QualifiedApiName ';
+        // the main process appends the OFFSET and LIMIT, so using the Database.query method rather than [] notation.
+        
+        // NOTE: EntityDefinition does NOT support IN clauses. If you do IN : {some list or set} it will fail inelegantly without an error message.
+        return 'SELECT QualifiedApiName, IsCustomizable, NamespacePrefix FROM EntityDefinition WHERE (NOT(QualifiedAPIName LIKE \'%__mdt\')) AND (NOT(QualifiedAPIName LIKE \'%__Tag\')) AND (NOT(QualifiedAPIName LIKE \'%__Share\')) AND (NOT(QualifiedAPIName LIKE \'%__ChangeEvent\')) AND (NOT(QualifiedAPIName LIKE \'%__History\')) AND (NOT(QualifiedAPIName LIKE \'%__Feed\')) AND (NOT(QualifiedAPIName LIKE \'%__VoteStat\')) AND (NOT(QualifiedAPIName LIKE \'%__ViewStat\')) AND (NOT(QualifiedAPIName LIKE \'%__DataCategorySelection\')) order by QualifiedApiName ';
         
     }
 
@@ -587,14 +716,15 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
                 //Boolean isUpdateable = fields.get(fieldName.toLowerCase()).getDescribe().isUpdateable();
                 //Schema.DescribeFieldResult res = fields.get(fieldName.toLowerCase()).getDescribe();
                 Status = 'buildFieldInfo / ' + objectName + ' - building FieldInfo for field : ' + fieldName;
-                debug(Status);
+                detailedDebug(Status);
                 FieldInfo fi = new FieldInfo(
                     fieldName,
                     fields.get(fieldName.toLowerCase()).getDescribe().isUpdateable(),
                     fields.get(fieldName.toLowerCase()).getDescribe().isCalculated(),
-                    auditFields.contains(fieldName.toLowerCase())
+                    auditFields.contains(fieldName.toLowerCase()),
+                    EnableWrite
                 );
-                debug('FieldInfo: '+objectName+'.'+fieldName+': isUpdateable ' + fi.isUpdateable + '; IsFormula ' + fi.IsFormula + '; auditField ' + fi.IsAuditField);
+                detailedDebug('FieldInfo: '+objectName+'.'+fieldName+': isUpdateable ' + fi.isUpdateable + '; IsFormula ' + fi.IsFormula + '; auditField ' + fi.IsAuditField);
                 thisFieldInfo.put(fieldName.toLowerCase(),fi);
             }
             fieldInfo.put(objectName.toLowerCase(), thisFieldInfo);
@@ -637,7 +767,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
         for (ObjectPermissions op : [SELECT Id,sobjecttype, ParentId,  PermissionsCreate, PermissionsDelete, PermissionsEdit, PermissionsRead, PermissionsViewAllRecords, PermissionsModifyAllRecords FROM ObjectPermissions WHERE ParentId = :PermissionSetId and sobjectType in : objectNames ])
         {
             Status = 'Adding existing object permissions for ' + op.sObjectType ;
-            debug(Status);
+            detailedDebug(Status);
             // Create the PermissionPackage if necessary. The constructor sets the ParentId of the ObjectPermissions to the PermissionSetId.
             if (permInfo.get(op.sObjectType.toLowerCase()) == null){
                 permInfo.put(op.sObjectType.toLowerCase(), new PermissionPackage(op.sObjectType, permissionSetId));
@@ -667,11 +797,11 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
             String  fieldNameOnly = perm.Field.split('\\.')[1].toLowerCase();
             // perm.Field comes back as Object.Field i.e. Account.Name
             String replacementKey = (perm.Field).toLowerCase();
-            debug('Looking for replacementKey ' + replacementKey + ' in ' + FieldNameReplacements.keySet());
+            detailedDebug('Looking for replacementKey ' + replacementKey + ' in ' + FieldNameReplacements.keySet());
             if (FieldNameReplacements.containsKey(replacementKey)){
                 Status = 'Replacing Field Name : ' + replacementKey;
                 fieldNameOnly = FieldNameReplacements.get(replacementKey);
-                debug('Replaced field name for ' + perm.Field + ' to ' + FieldNameReplacements.get(replacementKey));
+                detailedDebug('Replaced field name for ' + perm.Field + ' to ' + FieldNameReplacements.get(replacementKey));
             } 
 
             if (permInfo.get(fieldNameOnly.toLowerCase()) == null){
@@ -682,16 +812,16 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
             permInfo.put(fieldNameOnly.toLowerCase(),thisPP);
             // If it's not possible to even read the field, we don't want to add it to the FieldPermission Map in the PermissionPackage.
             Status = 'Reading existing FieldPermissions from fieldInfo for ' +perm?.sObjectType + '. ' + perm?.Field + '. fieldNameOnly: ' + fieldNameOnly + '. fieldInfo?.get((perm?.sObjectType.toLowerCase())) is Null? ' + (fieldInfo?.get((perm?.sObjectType.toLowerCase()))==null) + '. fieldInfo?.get((perm?.sObjectType.toLowerCase()))?.get(fieldNameOnly?.toLowerCase()) Is Null? ' + (fieldInfo?.get((perm?.sObjectType.toLowerCase()))?.get(fieldNameOnly?.toLowerCase())==null);
-            debug(Status);
+            detailedDebug(Status);
             if (fieldInfo?.get((perm?.sObjectType.toLowerCase()))?.get(fieldNameOnly?.toLowerCase())==null){
-                debug (JSON.serializePretty(perm));
-                debug(JSON.serializePretty(fieldInfo));
+                detailedDebug (JSON.serializePretty(perm));
+                detailedDebug(JSON.serializePretty(fieldInfo));
             }
             Boolean addField = fieldInfo?.get((perm?.sObjectType.toLowerCase()))?.get(fieldNameOnly?.toLowerCase())?.EnableRead;
             if (addField){
                 // Just to be safe, if we don't have a PermissionPackage for this object yet, create it.
                 if (permInfo.get(perm.sObjectType.toLowerCase()) == null){
-                    debug('addExistingFieldPermissions: Creating new PP for '+perm.sObjectType.toLowerCase());
+                    detailedDebug('addExistingFieldPermissions: Creating new PP for '+perm.sObjectType.toLowerCase());
                     PermissionPackage pp = new PermissionPackage(perm.sObjectType.toLowerCase(), permissionSetId);
                     // If we're here, we missed setting up the object permissions above.
                     pp = buildSingleObjectPermissions(pp);
@@ -706,7 +836,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
                 }
                 // Add the FieldPermissions from the query to the Map in the PermissionPackage.
                 Status = 'Adding existing FieldPermissions to the permInfo object for '+perm?.sObjectType + '.' + perm?.Field;
-                debug(Status);
+                detailedDebug(Status);
                 pp.FieldPermission.put(fieldNameOnly.toLowerCase(), perm);
                 permInfo.put(perm.sObjectType.toLowerCase(), pp);
             } 
@@ -728,7 +858,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
             // Create the PermissionPackage if necessary. The constructor sets the ParentId of the ObjectPermissions to the PermissionSetId.
             if (permInfo.get(objectName.toLowerCase()) == null){
                 // If we're here, we missed setting up the object permissions above.
-                debug('addNewObjectsAndFields: Creating new PP for '+objectName.toLowerCase());
+                detailedDebug('addNewObjectsAndFields: Creating new PP for '+objectName.toLowerCase());
                 permInfo.put(objectName.toLowerCase(),new PermissionPackage(objectName.toLowerCase(), permissionSetId));
             }
             PermissionPackage thisPP = permInfo.get(objectName.toLowerCase());
@@ -744,7 +874,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
                     // Since we processed object level first, we can assume there is a PermissionPackage for this object.
                     PermissionPackage pp = permInfo.get(objectName.toLowerCase());
                     Status = 'Creating a blank FieldPermissions for ' + objectName + ' / ' + fieldName;
-                    debug(Status);
+                    detailedDebug(Status);
                     if (!pp.FieldPermission.containsKey(fieldName.toLowerCase())){
                         pp.FieldPermission.put(fieldName.toLowerCase(),new FieldPermissions(
                             Field = objectName.toLowercase() + '.' + fieldName.toLowerCase(),
@@ -757,6 +887,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
             }
             
         }
+
 
         return permInfo;
     }
@@ -774,7 +905,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
         // Iterate over each package, and send each to buildSingleObjectPermissions() to populate.
         for (PermissionPackage pPkg : permInfo.values()){
             PermissionPackage ppWithObjectPermissions = buildSingleObjectPermissions(pPkg);
-            debug('buildObjectPermissions: Adding Existing ObjectPermissions For ' + pPkg.ObjectName.toLowerCase());
+            detailedDebug('buildObjectPermissions: Adding Existing ObjectPermissions For ' + pPkg.ObjectName.toLowerCase());
             out.put(pPkg.ObjectName.toLowerCase(),ppWithObjectPermissions);
         }
         return out;
@@ -789,7 +920,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
         // isDirty indicates whether the object was updated. If it is NOT dirty, we will exclude it from the
         // eventual upsert.
         Status = 'pp is null? ' + (pp == null ? true : false);
-        debug(Status);
+        detailedDebug(Status);
         Status = 'buildSingleObjectPermissions: Building Object Permissions for ' + pp?.ObjectName;
         debug(Status);
         if (pp.ObjectPermission.sObjectType == null){
@@ -848,7 +979,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
         // Later on, we won't attempt to upsert the PermissionSetTabSetting for this object if there is a preexisting one.
         for (PermissionSetTabSetting psts: [SELECT Id, Name FROM PermissionSetTabSetting WHERE ParentId = :PermissionSetId AND Name IN : pstsNames]){
             Status = 'Setting pstsExists to TRUE  For ' + psts.Name;
-            debug(Status);
+            detailedDebug(Status);
             // The Name field contains the object name, but standard objects are prepended with 'standard-', so strip that out
             String objectName = psts.Name.replace('standard-','').toLowerCase();
             pstsExists.add(objectName);
@@ -861,7 +992,7 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
         // but we will still be able to insert the permissions for others.
         Map<String,PermissionPackage> out = new Map<String,PermissionPackage>();
         for (PermissionPackage pp : permInfo.values()){
-            debug('pstsExists.contains + ' +pstsExists.contains(pp.ObjectName.toLowerCase()));
+            detailedDebug('pstsExists.contains + ' +pstsExists.contains(pp.ObjectName.toLowerCase()));
             pp.HasPreexistingTabSetting = pstsExists.contains(pp.ObjectName.toLowerCase());
             if (!pstsExists.contains(pp.ObjectName.toLowerCase())){
                 pp.TabVisibility=new PermissionSetTabSetting(
@@ -914,12 +1045,14 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
        
         Boolean isDirty=false;
         Status = 'Setting field permissions for ' + fp.Field + ' / SetRead: ' + fieldInfo.EnableRead + ' / Existing PermissionsRead: ' + fp.PermissionsRead;
+        detailedDebug(Status);
         if ((fieldInfo.EnableRead) && (fp.PermissionsRead == null || fp.PermissionsRead == false)){
             fp.PermissionsRead = true;
             isDirty=true;
         }
         // Don't attempt to write Edit permissions to formulas.
         Status = 'Setting field permissions for ' + fp.Field + ' / SetRead: ' + fieldInfo.EnableUpdate + ' / Existing PermissionsEdit: ' + fp.PermissionsEdit;
+        detailedDebug(Status);
         if (fieldInfo.EnableUpdate && (fp.PermissionsEdit == null || fp.PermissionsEdit == false)){
             fp.PermissionsEdit = true;
             isDirty=true;
@@ -934,23 +1067,17 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
      **********************************/
     public override String toString(){
         String out = '\n\nUpdatePSAllFieldsAllObjectsQueueable\n';
-        if (TotalObjects != null && TotalObjects != 0){
-            out += 'Total Objects: ' + TotalObjects;
-            out += 'Batch: ' + Iteration + ' of ' + Integer.valueOf(Math.ceil(TotalObjects/(Iteration==0 ? 1 : Iteration)));
-        } else {
-            out += 'Iteration: ' + Iteration + ' (Total Objects Not yet Calculated)';
-        }
+        out += 'Iteration: ' + Iteration + '\n';
         out += 'PermissionSetId ' +  PermissionSetId + '\n';
         out += 'RecordsPerQueueable (Query Limit / Qty Objects to Process In This Batch): ' +  RecordsPerQueueable+ '\n';
-        out += 'Iteration: ' +  Iteration+ '\n';
+        out += 'TotalObjectsThisIteration: ' +  TotalObjectsThisIteration+ '\n';
         out += 'Query Offset: ' + (RecordsPerQueueable * Iteration)+ '\n';
         out += 'Max Iterations: ' + (MaxIterations == -1 ? 'All' : (MaxIterations == 0 ? 'This Batch Only' : (String.valueOf(MaxIterations)))) + '\n';
-        out += '';
         out += 'EnableWrite Permissions: ' +  EnableWrite+ '\n';
-        out += 'FieldNameReplacements: ' + FieldNameReplacements?.size()+ '\n';
-        out += 'ObjectNameReplacements: ' +  ObjectNameReplacements?.size()+ '\n';
-        out += 'ObjectExclusions: ' +  ObjectExclusions?.size()+ '\n';
-        out += 'NamespaceExclusions: ' +  NamespaceExclusions?.size()+ '\n';
+        out += 'Qty FieldNameReplacements: ' + FieldNameReplacements?.size()+ '\n';
+        out += 'Qty ObjectNameReplacements: ' +  ObjectNameReplacements?.size()+ '\n';
+        out += 'Qty ObjectExclusions: ' +  GlobalObjectExclusions?.size()+ '\n';
+        out += 'Qty NamespaceExclusions: ' +  GlobalNamespaceExclusions?.size()+ '\n';
         out += 'Most Recent Status Trace: ' + Status + '\n';
         return out;
     }
@@ -961,7 +1088,13 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
 
     public static void debug(String msg){
         if (EnableDebug){
-            System.debug(msg);
+            System.debug('###'+msg);
+        }
+    }
+
+    public static void detailedDebug(String msg){
+        if (EnableVerboseDebug){
+            System.debug('#####'+msg);
         }
     }
 
@@ -1046,25 +1179,28 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
         public Boolean IsFormula {get;set;}
         public Boolean IsUpdateable {get;set;}
         public Boolean IsAuditField {get;set;}
+        public Boolean EnableWrite {get;set;} // This is the global setting to enable write access
         public Boolean EnableRead { get {
             // No scenarios found where we would not want to apply read permission.
             return true;
         }}
-        public Boolean EnableUpdate { get{
-            return !IsAuditField && IsUpdateable && !IsFormula;
+        public Boolean EnableUpdate { get {
+            return !IsAuditField && IsUpdateable && !IsFormula && EnableWrite;
+        
         }}
 
-        public FieldInfo(String fName, Boolean isUpdate, Boolean isForm, Boolean isAudit){
+        public FieldInfo(String fName, Boolean isUpdate, Boolean isForm, Boolean isAudit, Boolean ew){
             Name = fName.toLowerCase();
             IsFormula = isForm;
             IsUpdateable = isUpdate;
             IsAuditField = isAudit;
+            EnableWrite = ew;
         }
 
         
     }
 
-    
+    public Class UpdatePSException extends Exception {}
 
     /* ##################################################################################################################################
     *                                                     METADATA API SERVICE METHODS
@@ -1658,32 +1794,53 @@ public with sharing class UpdatePSAllFieldsAllObjectsQueueable implements Queuea
             return response_x.result;
         }
         
-        public UpdatePSAllFieldsAllObjectsQueueable.IReadResult readMetadata(String type_x,String[] fullNames) {
+        public ReadMetadataResult readMetadata(String type_x,String[] fullNames) {
             UpdatePSAllFieldsAllObjectsQueueable.readMetadata_element request_x = new UpdatePSAllFieldsAllObjectsQueueable.readMetadata_element();
             request_x.type_x = type_x;
             request_x.fullNames = fullNames;
             UpdatePSAllFieldsAllObjectsQueueable.IReadResponseElement response_x;
             Map<String, UpdatePSAllFieldsAllObjectsQueueable.IReadResponseElement> response_map_x = new Map<String, UpdatePSAllFieldsAllObjectsQueueable.IReadResponseElement>();
             response_map_x.put('response_x', response_x);
-            WebServiceCallout.invoke(
-                this,
-                request_x,
-                response_map_x,
-                new String[]{endpoint_x,
-                '',
-                SOAP_M_URI,
-                'readMetadata',
-                SOAP_M_URI,
-                'readMetadataResponse',
-                'UpdatePSAllFieldsAllObjectsQueueable.read' + type_x + 'Response_element'}
-            );
-            response_x = response_map_x.get('response_x');
-            return response_x.getResult();
+            try {
+                    WebServiceCallout.invoke(
+                    this,
+                    request_x,
+                    response_map_x,
+                    new String[]{endpoint_x,
+                    '',
+                    SOAP_M_URI,
+                    'readMetadata',
+                    SOAP_M_URI,
+                    'readMetadataResponse',
+                    'UpdatePSAllFieldsAllObjectsQueueable.read' + type_x + 'Response_element'}
+                );
+                response_x = response_map_x.get('response_x');
+                return new ReadMetadataResult(response_x.getResult());
+            } catch (MetadataServiceException e){
+                debug('Web Service Callout Error ' + e.getMessage());
+                return new ReadMetadataResult(e);
+            }
+            
+            
         }
     
         }
 
-    
+    public Class ReadMetadataResult {
+        // This is an attempt to trap the callout and auto-retry, but it does not seem possible
+        // to trap the WebServiceCallout error properly
+        public UpdatePSAllFieldsAllObjectsQueueable.IReadResult result {get;set;}
+        public MetadataServiceException e {get;set;}
+        public Boolean IsError {get;set;}
+        public ReadMetadataResult(MetadataServiceException ex){
+            e = ex;
+            IsError = true;
+        }
+        public ReadMetadataResult(UpdatePSAllFieldsAllObjectsQueueable.IReadResult res){
+            result = res;
+            IsError = false;
+        }
+    }
     
     
 
