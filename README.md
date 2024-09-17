@@ -24,9 +24,10 @@ UpdatePSAllFieldsAllObjectsQueueable aaq = new UpdatePSAllFieldsAllObjectsQueuea
 System.enqueueJob(aaq); 
 ```
 
-The ID of your `PermissionSet` is in the URL when you look at it in Setup. It begins with `0PS`.
+The 15-character ID of your `PermissionSet` is in the URL when you look at it in Setup. It begins with `0PS` and ends before the `%3F`.
 ```
-https://myorg.sandbox.lightning.force.com/lightning/setup/PermSets/page?address=%2F**0PSWL0000006Fu1**%3Fs%3DEntityPermissions
+https://myorg.sandbox.lightning.force.com/lightning/setup/PermSets/page?address=%2F0PSWL0000006Fu1%3Fs%3DEntityPermissions
+                                                                                   ^^^^^^^^^^^^^^^
 ```
 
 If you go to Setup -> Apex Jobs, you will see the status. If your `PermissionSet` is large to begin with, you might get a timeout, in which case you should just trigger it again.
