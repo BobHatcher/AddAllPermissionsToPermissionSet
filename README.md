@@ -20,7 +20,7 @@ Two easy steps to run this on all your objects. You need to do this while logged
 1. In Developer Console, File -> New -> Apex Class. Name it this, exactly:      `UpdatePSAllFieldsAllObjectsQueueable` and save.
 2. In execute anonymous, execute the following two lines, substituting the ID of the Permission Set you want to build -- *strongly recommended* you use the clone!
 ```
-UpdatePSAllFieldsAllObjectsQueueable aaq = new UpdatePSAllFieldsAllObjectsQueueable([ID OF YOUR PERMISSION SET IN SINGLE QUOTES]);
+UpdatePSAllFieldsAllObjectsQueueable aaq = new UpdatePSAllFieldsAllObjectsQueueable(UpdatePSAllFieldsAllObjectsQueueable.INSTRUCTION_START,[ID OF YOUR PERMISSION SET IN SINGLE QUOTES]);
 System.enqueueJob(aaq); 
 ```
 ## Important Caveat
