@@ -23,6 +23,17 @@ Two easy steps to run this on all your objects. You need to do this while logged
 UpdatePSAllFieldsAllObjectsQueueable aaq = new UpdatePSAllFieldsAllObjectsQueueable(UpdatePSAllFieldsAllObjectsQueueable.INSTRUCTION_START,[ID OF YOUR PERMISSION SET IN SINGLE QUOTES]);
 System.enqueueJob(aaq); 
 ```
+
+If you go to Setup -> Apex Jobs, you will see the status. If your `PermissionSet` is large to begin wtih, you might get a timeout, in which case you should just trigger it again.
+```IO Exception: Read timed out	
+```
+
+After a while, you might find that there is an error. These are usually due to you not having permission to a certain object. For example,
+```
+Error occured processing component Modify_All. In field: recordType - no RecordType named innohub__Activity__c.Activity_Type_1 found (INVALID_CROSS_REFERENCE_KEY).
+```
+In this case, it shows that the record type process failed to apply Record Type `Activity_Type_1` on object `innohub__Activity__c`. Either exclude the object altogether, or make sure you have permission to it. 
+
 ## Important Caveat
 
 *Make sure you have licenses assigned:* If the running user does not have a license to see a given Object, permissions will not be assigned. For example, Omnichannel, Knowledge, or 3rd party apps.  This will not cause the process to error, though.
