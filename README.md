@@ -8,9 +8,9 @@ This will add to a given Permission Set:
 * Read, Write, Delete, View All, Modify All to all objects and Platform Events. You can exclude objects individually or namespace.
 * Read access to all fields on all objects, and optionally edit access
 * Assigns all Record Types for all Objects
-* Sets the Tab to Visible for all Objects
+* Sets the Tab to Visible for all Objects if a Tab exists
 * Assigns all Apex Classes
-* Assigns all Apex Pages
+* Assigns all Apex Pages NOT in a Namespace (i.e., not from managed/unmanaged packages)
 * Assigns all Custom Apps
 
 ## tl;dr / I Just Want to Run This Thing / Instructions for Admins and Nontechnical People
